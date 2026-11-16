@@ -9,7 +9,7 @@
         "fruitcake/laravel-cors": "^2.0",
         "guzzlehttp/guzzle": "^7.0.1",
         "laravel/framework": "^9.0",
-        "laravel/tinker": "^2.5",
+        "laravel/tinker": "^3.1",
         "laravel/ui": "^3.3",
         "psr/simple-cache": "^2.0",
         "spatie/laravel-medialibrary": "^10.0.0",
