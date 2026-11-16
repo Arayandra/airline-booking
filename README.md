@@ -1,5 +1,7 @@
 # Airline Booking
 
+![CI](https://github.com/Arayandra/airline-booking/actions/workflows/ci.yml/badge.svg?branch=main)
+
 Aplikasi pemesanan tiket pesawat berbasis **Laravel 9**. Pengguna dapat melihat dan mencari jadwal penerbangan, melakukan pemesanan tiket, memantau status tiket, serta mengelola profil. Admin dapat mengelola data maskapai, pesawat, bandara, penerbangan, tiket, dan pelanggan melalui dashboard.
 
 Repository: **[Arayandra/airline-booking](https://github.com/Arayandra/airline-booking)**
@@ -206,3 +208,24 @@ GitHub Actions runs the PHPUnit suite and validates registered Laravel routes on
 This repository currently uses Laravel 9 and legacy Laravel UI / DataTables packages. Laravel 9 no longer receives security fixes. Do not deploy this version as a public production service.
 
 A framework upgrade has intentionally not been applied as a blind version bump. The next maintenance release should first move the runtime to PHP 8.3+, review package compatibility (especially Laravel UI, Spatie Media Library, Yajra DataTables, and the localization/theme packages), then upgrade Laravel in stages, rebuild frontend assets, and run the complete booking/cancellation regression suite. The current CI checks the existing codebase; it does not certify the legacy framework as supported.
+
+
+## Rencana upgrade Laravel
+
+**Baseline saat ini:** Laravel 9 dengan constraint PHP `^7.3|^8.0`. Security support Laravel 9 berakhir pada **6 Februari 2024**. Ini adalah prioritas upgrade tertinggi di antara proyek Laravel pada portofolio ini.
+
+**Target:** Laravel 13 dan PHP 8.3+. Upgrade belum diterapkan pada `composer.json` atau `composer.lock`.
+
+Sebelum upgrade, audit kompatibilitas paket langsung yang berisiko tinggi: `fruitcake/laravel-cors`, `laravel/ui`, `spatie/laravel-medialibrary`, `yajra/laravel-datatables-oracle`, `psr/simple-cache`, `spatie/laravel-ignition`, PHPUnit, dan Collision. Periksa juga Laravel Mix 6/Webpack serta dependensi JavaScript secara terpisah; jangan mencampur migrasi framework dengan refactor frontend besar dalam satu perubahan.
+
+Urutan validasi:
+
+1. Buat branch `upgrade/laravel-13`, dokumentasikan versi PHP/Composer/Node yang dipakai, dan simpan hasil CI baseline.
+2. Naikkan runtime ke PHP 8.3+, lalu perbarui paket satu per satu sesuai constraint yang mendukung Laravel 13. Gunakan `composer why-not laravel/framework ^13.0` untuk menemukan blocker.
+3. Periksa kompatibilitas autentikasi, middleware admin, upload/media, DataTables, booking/cancellation, transactional seat allocation, dan pengelolaan status tiket.
+4. Jalankan test suite pada database sementara, migration + seeder, `php artisan route:list`, build frontend, serta smoke test untuk alur pencarian penerbangan dan pemesanan.
+5. Jalankan `composer validate`, `composer audit`, dan seluruh workflow CI. Commit lockfile yang diperbarui hanya setelah seluruh test lulus.
+
+File `airline.sql` dan aset frontend yang dipakai aplikasi tetap dipertahankan; keduanya bukan artefak runtime yang boleh dihapus tanpa mengganti alur instalasi atau referensi asset.
+
+Referensi: [Laravel release/support policy](https://laravel.com/framework/docs/releases) · [Laravel 13 upgrade guide](https://laravel.com/docs/13.x/upgrade).
