@@ -10,6 +10,7 @@ use App\Models\City;
 use App\Models\Flight;
 use DataTables;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class TicketController extends Controller
 {
@@ -109,28 +110,54 @@ class TicketController extends Controller
 
     public function changeStatus(Request $request, Ticket $ticket)
     {
+        $validated = $request->validate([
+            'status' => ['required', 'in:approve,canceled'],
+        ]);
 
         try {
+            $updated = DB::transaction(function () use ($ticket, $validated) {
+                $lockedTicket = Ticket::whereKey($ticket->id)->lockForUpdate()->firstOrFail();
+                $flight = Flight::whereKey($lockedTicket->flight_id)->lockForUpdate()->firstOrFail();
 
-            $status = 0;
-            if ($request->status == 'approve') {
-                $status = 1;
-            } else if ($request->status == 'canceled') {
-                $status = 2;
+                $previousStatus = (int) $lockedTicket->getRawOriginal('status');
+                $nextStatus = $validated['status'] === 'approve' ? 1 : 2;
+
+                if ($nextStatus === 2 && $previousStatus !== 2) {
+                    // A ticket reserves exactly one seat. Restore it only on the
+                    // first transition to cancelled so repeated requests are safe.
+                    $flight->increment('remain_seats', 1);
+                } elseif ($nextStatus === 1 && $previousStatus === 2) {
+                    // Re-approving an administratively cancelled ticket reserves
+                    // one seat again, but never allows the remaining count below zero.
+                    if ((int) $flight->remain_seats < 1) {
+                        return false;
+                    }
+
+                    $flight->decrement('remain_seats', 1);
+                }
+
+                $lockedTicket->status = $nextStatus;
+                $lockedTicket->save();
+
+                return true;
+            });
+
+            if (!$updated) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No seats are available to re-approve this ticket.',
+                ], Response::HTTP_CONFLICT);
             }
 
-            $ticket->update([
-                'status' => $status
-            ]);
-
-            return $this->josnResponse(true, "Ticket status updated successfully.", Response::HTTP_CREATED);
+            return $this->josnResponse(true, 'Ticket status updated successfully.', Response::HTTP_OK);
         } catch (\Throwable $th) {
-            return response()->json(['message' => showErrorMessage($th)], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json([
+                'message' => showErrorMessage($th),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
-
-    public function showFlights(Request $request)
+        public function showFlights(Request $request)
     {
         if ($request->ajax()) {
             $data = Flight::query()
@@ -296,61 +323,126 @@ class TicketController extends Controller
 
     public function book(Request $request)
     {
-        try {
-            //find flight
-            $flight = Flight::find($request->flight_id);
+        $validated = $request->validate([
+            'flight_id' => ['required', 'integer', 'exists:flights,id'],
+            // The current data model stores one seat number per ticket. Until a
+            // passenger/ticket relation exists, accept exactly one seat per ticket.
+            'seats' => ['required', 'integer', 'in:1'],
+        ]);
 
-            //check flight seat is available
-            if ($flight->remain_seats < $request->seats) {
+        try {
+            $result = DB::transaction(function () use ($validated) {
+                $flight = Flight::whereKey($validated['flight_id'])
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$flight || !$flight->status) {
+                    return ['status' => false, 'code' => Response::HTTP_NOT_FOUND, 'message' => 'Flight is unavailable.'];
+                }
+
+                if ($flight->departure && $flight->departure <= now()) {
+                    return ['status' => false, 'code' => Response::HTTP_UNPROCESSABLE_ENTITY, 'message' => 'This flight has already departed.'];
+                }
+
+                if ((int) $flight->remain_seats < 1) {
+                    return ['status' => false, 'code' => Response::HTTP_CONFLICT, 'message' => __('api.not_enough_seats')];
+                }
+
+                $existingTicket = Ticket::where('user_id', auth()->id())
+                    ->where('flight_id', $flight->id)
+                    ->where('status', '<>', 2)
+                    ->exists();
+
+                if ($existingTicket) {
+                    return ['status' => false, 'code' => Response::HTTP_CONFLICT, 'message' => 'You have already booked this flight.'];
+                }
+
+                $occupiedSeats = Ticket::where('flight_id', $flight->id)
+                    ->where('status', '<>', 2)
+                    ->pluck('seat_number')
+                    ->map(fn ($seat) => (string) $seat)
+                    ->all();
+
+                $seatNumber = null;
+                for ($seat = 1; $seat <= (int) $flight->seats; $seat++) {
+                    if (!in_array((string) $seat, $occupiedSeats, true)) {
+                        $seatNumber = (string) $seat;
+                        break;
+                    }
+                }
+
+                if ($seatNumber === null) {
+                    return ['status' => false, 'code' => Response::HTTP_CONFLICT, 'message' => __('api.not_enough_seats')];
+                }
+
+                Ticket::create([
+                    'flight_id' => $flight->id,
+                    'user_id' => auth()->id(),
+                    'seat_number' => $seatNumber,
+                    'status' => 0,
+                ]);
+
+                // One ticket represents one passenger and therefore reserves one seat.
+                $flight->decrement('remain_seats', 1);
+
+                return ['status' => true, 'code' => Response::HTTP_CREATED, 'message' => __('api.booking_success')];
+            });
+
+            if (!$result['status']) {
                 return response()->json([
                     'status' => false,
-                    'message' => __('api.not_enough_seats')
-                ]);
+                    'message' => $result['message'],
+                ], $result['code']);
             }
 
-            // chrck user has already booked this flight
-            $ticket = Ticket::whereUserId(auth()->id())
-                ->whereFlightId($flight->id)
-                ->first();
-
-            if ($ticket) {
-                return $this->josnResponse(true, "You have already booked this flight", Response::HTTP_BAD_REQUEST);
-            }
-
-            // create ticket
-            Ticket::create([
-                'flight_id' => $request->flight_id,
-                'user_id' => auth()->id(),
-                'seat_number' => rand(1, 100),
-            ]);
-
-            // reduce flight seat
-            $flight->decrement('remain_seats', $request->seats);
-
-            // send notification to admin
-
-            return $this->josnResponse(true, __('api.booking_success'), Response::HTTP_CREATED);
+            return $this->josnResponse(true, $result['message'], $result['code']);
         } catch (\Throwable $th) {
-            return response()->json(['message' => showErrorMessage($th)], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return response()->json([
+                'status' => false,
+                'message' => showErrorMessage($th),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
-    public function cancel(Request $request)
+        public function cancel(Request $request)
     {
-        try {
-            $ticket = Ticket::find($request->id);
+        $validated = $request->validate([
+            'id' => ['required', 'integer'],
+        ]);
 
-            //check ticket is booked by user
-            if ($ticket->user_id != auth()->id()) {
-                return $this->josnResponse(false, __('api.not_your_ticket'), Response::HTTP_FORBIDDEN);
+        try {
+            $result = DB::transaction(function () use ($validated) {
+                $ticket = Ticket::whereKey($validated['id'])->lockForUpdate()->first();
+
+                if (!$ticket) {
+                    return ['status' => false, 'code' => Response::HTTP_NOT_FOUND, 'message' => 'Ticket not found.'];
+                }
+
+                if ((int) $ticket->user_id !== (int) auth()->id()) {
+                    return ['status' => false, 'code' => Response::HTTP_FORBIDDEN, 'message' => __('api.not_your_ticket')];
+                }
+
+                $flight = Flight::whereKey($ticket->flight_id)->lockForUpdate()->first();
+                if (!$flight) {
+                    return ['status' => false, 'code' => Response::HTTP_NOT_FOUND, 'message' => 'Flight not found.'];
+                }
+
+                $currentStatus = (int) $ticket->getRawOriginal('status');
+                if ($currentStatus !== 2) {
+                    // Admin-cancelled tickets have already released their seat.
+                    $flight->increment('remain_seats', 1);
+                }
+
+                $ticket->delete();
+
+                return ['status' => true, 'code' => Response::HTTP_OK, 'message' => __('messages.cancel_success')];
+            });
+
+            if (!$result['status']) {
+                return $this->josnResponse(false, $result['message'], $result['code']);
             }
 
-            //  find flight and increase seat
-            $ticket->flight->increment('remain_seats', 1);
-            $ticket->delete();
-
-
-            return $this->josnResponse(true, __('messages.cancel_success'), Response::HTTP_OK);
+            return $this->josnResponse(true, $result['message'], $result['code']);
         } catch (\Throwable $th) {
             return $this->josnResponse(false, __('api.internal_server_error'), Response::HTTP_INTERNAL_SERVER_ERROR, null, showErrorMessage($th));
         }
