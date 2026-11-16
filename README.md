@@ -26,6 +26,10 @@ Repository: **[Arayandra/airline-booking](https://github.com/Arayandra/airline-b
 
 Halaman administrasi dilindungi oleh middleware autentikasi dan middleware admin.
 
+### Aturan pemesanan kursi
+
+One ticket represents one passenger and reserves exactly one seat. The current UI/API accepts one seat per booking request. Multi-passenger booking is intentionally not enabled until the data model supports multiple passenger/ticket records per reservation. Booking and cancellation operations lock the flight row and update available seats transactionally.
+
 ## Teknologi
 
 | Komponen | Teknologi |
@@ -190,3 +194,8 @@ Jalankan pengujian yang tersedia dengan:
 ## Lisensi
 
 File composer.json mendeklarasikan lisensi MIT. Pastikan seluruh aset dan dependency pihak ketiga yang digunakan tetap mengikuti lisensi masing-masing.
+
+
+## Automated checks
+
+GitHub Actions runs the PHPUnit suite and validates registered Laravel routes on pushes and pull requests to `main`. The seat allocator has unit tests for first-free-seat selection, full flights, invalid capacity, and numeric/string seat values.
