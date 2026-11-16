@@ -128,12 +128,29 @@ class TicketController extends Controller
                     // first transition to cancelled so repeated requests are safe.
                     $flight->increment('remain_seats', 1);
                 } elseif ($nextStatus === 1 && $previousStatus === 2) {
-                    // Re-approving an administratively cancelled ticket reserves
-                    // one seat again, but never allows the remaining count below zero.
+                    // A cancelled seat may already have been assigned to another
+                    // passenger. Reapproval therefore needs a fresh free seat number.
                     if ((int) $flight->remain_seats < 1) {
                         return false;
                     }
 
+                    $occupiedSeats = Ticket::where('flight_id', $flight->id)
+                        ->where('id', '<>', $lockedTicket->id)
+                        ->where('status', '<>', 2)
+                        ->pluck('seat_number')
+                        ->map(fn ($seat) => (string) $seat)
+                        ->all();
+
+                    $seatNumber = app(FlightSeatAllocator::class)->nextAvailableSeatNumber(
+                        (int) $flight->seats,
+                        $occupiedSeats
+                    );
+
+                    if ($seatNumber === null) {
+                        return false;
+                    }
+
+                    $lockedTicket->seat_number = $seatNumber;
                     $flight->decrement('remain_seats', 1);
                 }
 
@@ -181,8 +198,9 @@ class TicketController extends Controller
                 ->setRowClass(fn ($row) => 'align-middle')
                 ->addColumn('action', function ($row) {
                     // if user has already booked this flight, disable the button
-                    $booked = Ticket::where('user_id', auth()->user()->id)
+                    $booked = Ticket::where('user_id', auth()->id())
                         ->where('flight_id', $row->id)
+                        ->where('status', '<>', 2)
                         ->exists();
                     if ($booked) {
                         return '<button class="btn btn-success waves-effect waves-light">Booked</button>';

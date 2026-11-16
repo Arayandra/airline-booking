@@ -28,7 +28,7 @@ Halaman administrasi dilindungi oleh middleware autentikasi dan middleware admin
 
 ### Aturan pemesanan kursi
 
-One ticket represents one passenger and reserves exactly one seat. The current UI/API accepts one seat per booking request. Multi-passenger booking is intentionally not enabled until the data model supports multiple passenger/ticket records per reservation. Booking and cancellation operations lock the flight row and update available seats transactionally.
+One ticket represents one passenger and reserves exactly one seat. The current UI/API accepts one seat per booking request. Multi-passenger booking is intentionally not enabled until the data model supports multiple passenger/ticket records per reservation. Booking and cancellation operations lock the flight row and update available seats transactionally. When an administrator restores a cancelled ticket, the system allocates a currently free seat number again instead of reusing the old reservation number blindly. Cancelled tickets are not shown as active bookings in the flight list.
 
 ## Teknologi
 
