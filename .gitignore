@@ -15,3 +15,8 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+*.log
