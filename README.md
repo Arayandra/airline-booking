@@ -228,3 +228,8 @@ Referensi: [Laravel release/support policy](https://laravel.com/framework/docs/r
 ## Bukti visual aplikasi
 
 Screenshot browser dari aplikasi yang sedang berjalan belum tersedia di repository. Aset pesawat, ikon, dan gambar frontend tidak dianggap sebagai screenshot aplikasi. Setelah menjalankan demo dengan database seed, tambahkan tangkapan layar halaman pencarian penerbangan, detail/pemesanan tiket, dan dashboard admin ke folder `docs/screenshots/`, lalu tampilkan file tersebut di bagian ini.
+
+
+## Latest CI verification
+
+Verified on **16 November 2026** on branch `main`: **8 PHPUnit tests passed** and `php artisan route:list --except-vendor` completed successfully against MySQL 8. The current CI workflow does not install Node.js or build the Laravel Mix frontend assets, so the successful run should not be described as a frontend build verification.
