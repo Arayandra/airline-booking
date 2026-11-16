@@ -199,3 +199,10 @@ File composer.json mendeklarasikan lisensi MIT. Pastikan seluruh aset dan depend
 ## Automated checks
 
 GitHub Actions runs the PHPUnit suite and validates registered Laravel routes on pushes and pull requests to `main`. The seat allocator has unit tests for first-free-seat selection, full flights, invalid capacity, and numeric/string seat values.
+
+
+## Maintenance status
+
+This repository currently uses Laravel 9 and legacy Laravel UI / DataTables packages. Laravel 9 no longer receives security fixes. Do not deploy this version as a public production service.
+
+A framework upgrade has intentionally not been applied as a blind version bump. The next maintenance release should first move the runtime to PHP 8.3+, review package compatibility (especially Laravel UI, Spatie Media Library, Yajra DataTables, and the localization/theme packages), then upgrade Laravel in stages, rebuild frontend assets, and run the complete booking/cancellation regression suite. The current CI checks the existing codebase; it does not certify the legacy framework as supported.
