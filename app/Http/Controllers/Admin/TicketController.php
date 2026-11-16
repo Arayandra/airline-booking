@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Models\Airline;
 use App\Models\City;
 use App\Models\Flight;
+use App\Services\FlightSeatAllocator;
 use DataTables;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -363,13 +364,10 @@ class TicketController extends Controller
                     ->map(fn ($seat) => (string) $seat)
                     ->all();
 
-                $seatNumber = null;
-                for ($seat = 1; $seat <= (int) $flight->seats; $seat++) {
-                    if (!in_array((string) $seat, $occupiedSeats, true)) {
-                        $seatNumber = (string) $seat;
-                        break;
-                    }
-                }
+                $seatNumber = app(FlightSeatAllocator::class)->nextAvailableSeatNumber(
+                    (int) $flight->seats,
+                    $occupiedSeats
+                );
 
                 if ($seatNumber === null) {
                     return ['status' => false, 'code' => Response::HTTP_CONFLICT, 'message' => __('api.not_enough_seats')];
