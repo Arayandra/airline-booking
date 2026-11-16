@@ -229,3 +229,8 @@ Urutan validasi:
 File `airline.sql` dan aset frontend yang dipakai aplikasi tetap dipertahankan; keduanya bukan artefak runtime yang boleh dihapus tanpa mengganti alur instalasi atau referensi asset.
 
 Referensi: [Laravel release/support policy](https://laravel.com/framework/docs/releases) · [Laravel 13 upgrade guide](https://laravel.com/docs/13.x/upgrade).
+
+
+## Bukti visual aplikasi
+
+Screenshot browser dari aplikasi yang sedang berjalan belum tersedia di repository. Aset pesawat, ikon, dan gambar frontend tidak dianggap sebagai screenshot aplikasi. Setelah menjalankan demo dengan database seed, tambahkan tangkapan layar halaman pencarian penerbangan, detail/pemesanan tiket, dan dashboard admin ke folder `docs/screenshots/`, lalu tampilkan file tersebut di bagian ini.
